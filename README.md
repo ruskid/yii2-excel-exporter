@@ -51,6 +51,8 @@ $exporter->values = [
 //Optional
 $exporter->filename("reports-2015");
 $exporter->startPoint('B3');
+
+//Send file to browser
 return $exporter->export();
 ```
 - You can also add <b>styling</b>, see style and headerStyle parameters. 
