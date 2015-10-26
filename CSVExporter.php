@@ -23,7 +23,6 @@ class CSVExporter extends \PHPExcel {
     public $models;
 
     /**
-     *
      * @var array
      */
     public $values;
@@ -81,7 +80,8 @@ class CSVExporter extends \PHPExcel {
      */
     public function getLetters() {
         if (empty($this->_letters)) {
-            $x = $this->startPoint[0]; //use letter from start point
+             //use letter from start point
+            $x = preg_replace("/[^A-Z]+/", "", $this->startPoint);
             $count = 0;
             $max = count($this->values);
             for ($x; $x <= 'Z' && $count < $max; $x++) {
@@ -97,8 +97,10 @@ class CSVExporter extends \PHPExcel {
      * @return integer
      */
     public function getCurrentRowNumber() {
-        if ($this->_currentRowNumber === null) {//take from start point
-            $this->_currentRowNumber = $this->startPoint[1];
+        if ($this->_currentRowNumber === null) {
+            //If null take from start point
+            $startNumber = preg_replace("/[^0-9]+/", "", $this->startPoint);
+            $this->setCurrentRowNumber($startNumber);
         }
         return $this->_currentRowNumber;
     }
