@@ -11,21 +11,10 @@ namespace ruskid\csvexporter;
 use Exception;
 
 /**
- * Little Yii2 Helper that exports Active Records to CSV
+ * Little export helper for yii2
  * @author Victor Demin <demin@trabeja.com>
  */
-class CSVExporter extends \PHPExcel {
-
-    /**
-     * Active Records for export
-     * @var \yii\db\ActiveRecord 
-     */
-    public $models;
-
-    /**
-     * @var array
-     */
-    public $values;
+class CSVExporter {
 
     /**
      * All row style
@@ -46,130 +35,95 @@ class CSVExporter extends \PHPExcel {
     public $filename = 'results';
 
     /**
-     * Start point for export X|Y
-     * @var string 
+     * @var \PHPExcel 
      */
-    public $startPoint = 'A1';
-    private $_letters = [];
-    private $_currentRowNumber;
+    private $_phpexcel;
 
     /**
-     * PHPExcel Settings
+     * @return \PHPExcel
+     */
+    public function getPHPExcel() {
+        return $this->_phpexcel;
+    }
+
+    /**
+     * add PHPExcel dependency
      */
     public function __construct() {
-        parent::__construct();
-        $this->setActiveSheetIndex(0); //Use only one sheet
+        $this->_phpexcel = new \PHPExcel;
     }
 
     /**
-     * Will validate that required parameters are present
-     * @throws Exception
+     * Will set single cell value
+     * @param string $cellIndex
+     * @param string $value
+     * @param integer $sheetIndex
      */
-    private function validateInput() {
-        if (!$this->models) {
-            throw new Exception("'models' parameter is required in " . __CLASS__);
-        }
-        if (!$this->values) {
-            throw new Exception("'values' parameter is required in " . __CLASS__);
-        }
+    public function setCellValue($cellIndex, $value, $sheetIndex = 0) {
+        $phpexcel = $this->getPHPExcel();
+        $sheet = $phpexcel->getSheet($sheetIndex);
+        $sheet->setCellValue($cellIndex, $value);
     }
 
     /**
-     * Will generate letters by calculating start point X axe and number of values
-     * @return array
+     * Will set cell style from array
+     * @param string $cellIndex
+     * @param array $style
      */
-    public function getLetters() {
-        if (empty($this->_letters)) {
-             //use letter from start point
-            $x = preg_replace("/[^A-Z]+/", "", $this->startPoint);
-            $count = 0;
-            $max = count($this->values);
-            for ($x; $x <= 'Z' && $count < $max; $x++) {
-                array_push($this->_letters, $x);
-                $count++;
-            }
-        }
-        return $this->_letters;
+    public function setCellStyleFromArray($cellIndex, $style, $sheetIndex = 0) {
+        $phpexcel = $this->getPHPExcel();
+        $sheet = $phpexcel->getSheet($sheetIndex);
+        $sheet->getStyle($cellIndex)->applyFromArray($style);
     }
 
     /**
-     * Will get current row number
-     * @return integer
+     * Will set multiple models to excel.
+     * @param string $cellIndexStart
+     * @param yii\db\ActiveRecord[]|array $models
+     * @param array $config
+     * @param integer $sheetIndex
+     * @return string Next Free Coordinate
      */
-    public function getCurrentRowNumber() {
-        if ($this->_currentRowNumber === null) {
-            //If null take from start point
-            $startNumber = preg_replace("/[^0-9]+/", "", $this->startPoint);
-            $this->setCurrentRowNumber($startNumber);
-        }
-        return $this->_currentRowNumber;
-    }
-
-    /**
-     * Set new current row number
-     * @param integer $new
-     */
-    public function setCurrentRowNumber($new) {
-        $this->_currentRowNumber = $new;
-    }
-
-    /**
-     * Will set headers of Excel file
-     */
-    private function setHeaders() {
-        $col = 0;
-        $letters = $this->getLetters();
-        $row = $this->getCurrentRowNumber();
-        foreach ($this->values as $config) {
-            $label = isset($config['header']) ? $config['header'] : "";
-            $this->getActiveSheet()
-                    ->setCellValue($letters[$col] . $row, $label)
-                    ->getStyle($letters[$col] . $row)
-                    ->applyFromArray($this->headerStyle);
-            $col++;
-        }
-        $this->setCurrentRowNumber( ++$row);
-    }
-
-    /**
-     * Will set Active Records values to excel
-     */
-    private function setRows() {
-        $letters = $this->getLetters();
-        $row = $this->getCurrentRowNumber();
-
-        if (!is_array($this->models)) {
-            $this->models = [$this->models];
+    public function setCellData($cellIndexStart, $models, $config, $sheetIndex = 0) {
+        $letters = preg_replace("/[^A-Z]+/", "", $cellIndexStart); //start letter
+        $numbers = preg_replace("/[^0-9]+/", "", $cellIndexStart); //start number
+        //Set row headers
+        $tempLetter = $letters; //reset letter
+        foreach ($config as $attributeConfig) {
+            $header = isset($attributeConfig['header']) ? $attributeConfig['header'] : "";
+            $this->setCellValue($tempLetter . $numbers, $header);
+            $this->setCellStyleFromArray($tempLetter . $numbers, $this->headerStyle);
+            $tempLetter++;
         }
 
-        foreach ($this->models as $model) {
-            $col = 0;
-            foreach ($this->values as $config) {
-                $value = call_user_func($config['value'], $model);
-                $cell = $this->getActiveSheet();
-                $cell->setCellValue($letters[$col] . $row, $value);
-                if (!empty($this->style)) {//styling takes time
-                    $cell->getStyle($letters[$col] . $row)->applyFromArray($this->style);
+        //Set row values
+        $tempLetter = $letters; //reset letter
+        $numbers++; //set rows on new line after headers
+        foreach ($models as $model) {
+            foreach ($config as $attributeConfig) {
+                $value = call_user_func($attributeConfig['value'], $model);
+                $this->setCellValue($tempLetter . $numbers, $value);
+                if (!empty($this->style)) {
+                    $this->setCellStyleFromArray($tempLetter . $numbers, $this->style);
                 }
-                $col++;
+                $tempLetter++;
             }
-            $row++;
+            $numbers++;
+            $tempLetter = $letters;
         }
-        $this->setCurrentRowNumber($row);
+        return $tempLetter . $numbers;
     }
 
     /**
-     * Will export the results
-     * @return mixed
+     * Will load file into the browser. TODO strategies and formats
+     * @return file
      */
     public function export() {
-        $this->validateInput();
-        $this->setHeaders();
-        $this->setRows();
         return $this->sendFileToBrowser();
     }
 
     /**
+     * TODO strategies and formats
      * Will send file to the client's browser
      */
     private function sendFileToBrowser() {
@@ -179,7 +133,7 @@ class CSVExporter extends \PHPExcel {
         header("Pragma: "); //IE8 quick fix.
         header("Cache-Control: "); //IE8 quick fix.
 
-        $objWriter = \PHPExcel_IOFactory::createWriter($this, 'Excel2007');
+        $objWriter = \PHPExcel_IOFactory::createWriter($this->getPHPExcel(), 'Excel2007');
         $objWriter->save('php://output');
         \Yii::$app->end();
     }
